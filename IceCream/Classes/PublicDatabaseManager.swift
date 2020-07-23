@@ -18,6 +18,7 @@ final class PublicDatabaseManager: DatabaseManager {
     let container: CKContainer
     let database: CKDatabase
     
+    /// These are ordered from parent to children. So, when retrieiving data, parents are always written first to realm followed by children
     let syncObjects: [Syncable]
     
     init(objects: [Syncable], container: CKContainer) {
@@ -65,12 +66,28 @@ final class PublicDatabaseManager: DatabaseManager {
     
     // MARK: - Private Methods
     private func excuteQueryOperation(queryOperation: CKQueryOperation,on syncObject: Syncable, callback: ((Error?) -> Void)? = nil) {
+        
+        var changedRecords = [String: [CKRecord]]()
+        
         queryOperation.recordFetchedBlock = { record in
-            syncObject.add(record: record)
+            let currentRecords = changedRecords[record.recordType] ?? []
+            changedRecords[record.recordType] = currentRecords + [record]
         }
         
         queryOperation.queryCompletionBlock = { [weak self] cursor, error in
             guard let self = self else { return }
+            /// Save to the sync objects in order. This way, parents are always added first and children second so there are no dangling references
+            for syncObject in self.syncObjects {
+                for recordType in syncObject.recordTypes {
+                    if let records = changedRecords[recordType] {
+                        records.forEach {
+                            syncObject.add(record: $0)
+                        }                        
+                        changedRecords[recordType] = nil
+                    }
+                }
+            }
+            
             if let cursor = cursor {
                 let subsequentQueryOperation = CKQueryOperation(cursor: cursor)
                 self.excuteQueryOperation(queryOperation: subsequentQueryOperation, on: syncObject, callback: callback)
