@@ -192,14 +192,12 @@ final class PrivateDatabaseManager: DatabaseManager {
             
             /// Save to the sync objects in order. This way, parents are always added first and children second so there are no dangling references
             for syncObject in self.syncObjects {
-                for recordType in syncObject.recordTypes {
-                    if let records = changedRecords[recordType] {
-                        records.forEach {
-                            syncObject.add(record: $0)
-                        }                        
-                        changedRecords[recordType] = nil
-                    }
-                }
+                if let records = changedRecords[syncObject.recordType] {
+                     records.forEach {
+                         syncObject.add(record: $0)
+                     }
+                     changedRecords[syncObject.recordType] = nil
+                 }
             }
             
             for recordId in deletedRecordIds {
